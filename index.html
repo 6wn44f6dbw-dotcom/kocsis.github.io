@@ -175,13 +175,15 @@
                     </div>
                 </div>
 
+                <!-- Updated Widget: Haftalık Hedef Durumu -->
                 <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
                     <div>
-                        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Başarı Oranım</p>
-                        <h3 id="studentStatAccuracy" class="text-2xl font-extrabold text-emerald-600 mt-1">%0</h3>
+                        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Haftalık Hedef Durumu</p>
+                        <h3 id="studentWeeklyGoalStat" class="text-xl font-extrabold text-brand-600 mt-1">0 / 0</h3>
+                        <p id="studentWeeklyGoalSub" class="text-[11px] text-slate-400 mt-0.5">%0 Tamamlandı</p>
                     </div>
-                    <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-xl">
-                        <i class="fa-solid fa-chart-line"></i>
+                    <div class="w-12 h-12 bg-blue-50 text-brand-600 rounded-xl flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-bullseye"></i>
                     </div>
                 </div>
 
@@ -193,7 +195,7 @@
                         </div>
                     </div>
                     <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center text-xl">
-                        <i class="fa-solid fa-bullseye"></i>
+                        <i class="fa-solid fa-square-poll-vertical"></i>
                     </div>
                 </div>
 
@@ -316,7 +318,7 @@
             <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
                     <h2 class="text-lg font-bold text-slate-900">Koçluk Yapılan Öğrencilerim</h2>
-                    <p class="text-xs text-slate-500 mt-0.5">Sorumluluğunuzdaki öğrencilerin aylık soru çözümlerini ve ders analizlerini inceleyin.</p>
+                    <p class="text-xs text-slate-500 mt-0.5">Sorumluluğunuzdaki öğrencilerin aylık soru çözümlerini, haftalık hedeflerini ve ders analizlerini inceleyin.</p>
                 </div>
                 <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
                     <div class="flex items-center space-x-2">
@@ -705,8 +707,8 @@ function doPost(e) {
       if (contents.students) {
         var sheetS = ss.getSheetByName("Öğrenciler") || ss.insertSheet("Öğrenciler");
         sheetS.clear();
-        sheetS.appendRow(["id", "name", "class", "code", "teacherId", "note"]);
-        contents.students.forEach(function(s) { sheetS.appendRow([s.id, s.name, s.class || "", s.code, s.teacherId || "", s.note || ""]); });
+        sheetS.appendRow(["id", "name", "class", "code", "teacherId", "note", "weeklyGoal"]);
+        contents.students.forEach(function(s) { sheetS.appendRow([s.id, s.name, s.class || "", s.code, s.teacherId || "", s.note || "", s.weeklyGoal || 0]); });
       }
     }
     return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
@@ -729,7 +731,7 @@ function doPost(e) {
     <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
 
     <script>
-        const DEFAULT_SHEET_URL = 'https://script.google.com/macros/s/AKfycbyKzAqVtU6awfmntrOG7L99bNzDCek1c5n8mfzQI4KQWZnqKFLna5nRz5Tpgx7pFcWy/exec';
+        const DEFAULT_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxGiNjpbbUz4kj6PgnmFbhvMuCFCaP8AVhB7XvzNarjddLFrRGF0HyDsVSTfyeGokI/exec';
 
         const MONTH_NAMES_TR = [
             'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
@@ -745,9 +747,9 @@ function doPost(e) {
                 { id: 'T2', name: 'Ayşe Kaya', subject: 'Türkçe/Edebiyat', code: 'OGT102' }
             ],
             students: JSON.parse(localStorage.getItem('coaching_students')) || [
-                { id: 'S1', name: 'Ali Yılmaz', class: '12-A', code: 'OGR201', teacherId: 'T1', note: 'Matematik denemelerine ağırlık verilmeli.' },
-                { id: 'S2', name: 'Zeynep Kaya', class: '12-B', code: 'OGR202', teacherId: 'T1', note: 'Paragraf çözümleri harika gidiyor!' },
-                { id: 'S3', name: 'Can Demir', class: '11-A', code: 'OGR203', teacherId: 'T2', note: '' }
+                { id: 'S1', name: 'Ali Yılmaz', class: '12-A', code: 'OGR201', teacherId: 'T1', note: 'Matematik denemelerine ağırlık verilmeli.', weeklyGoal: 250 },
+                { id: 'S2', name: 'Zeynep Kaya', class: '12-B', code: 'OGR202', teacherId: 'T1', note: 'Paragraf çözümleri harika gidiyor!', weeklyGoal: 300 },
+                { id: 'S3', name: 'Can Demir', class: '11-A', code: 'OGR203', teacherId: 'T2', note: '', weeklyGoal: 200 }
             ],
             selectedStudentForNote: null,
             chartInstance: null,
@@ -795,6 +797,28 @@ function doPost(e) {
             return Array.from(months).sort().reverse();
         }
 
+        // Helper: Check if date string falls within current ISO week (Monday to Sunday)
+        function isDateInCurrentWeek(dateStr) {
+            if (!dateStr) return false;
+            const clean = formatDateOnly(dateStr);
+            const d = new Date(clean);
+            if (isNaN(d.getTime())) return false;
+
+            const now = new Date();
+            const dayOfWeek = now.getDay(); // 0 is Sunday, 1 is Monday...
+            const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+            
+            const monday = new Date(now);
+            monday.setDate(now.getDate() + distanceToMonday);
+            monday.setHours(0, 0, 0, 0);
+
+            const sunday = new Date(monday);
+            sunday.setDate(monday.getDate() + 6);
+            sunday.setHours(23, 59, 59, 999);
+
+            return d >= monday && d <= sunday;
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('inputDate').value = getLocalDateString();
             document.getElementById('inputSheetUrl').value = appState.sheetUrl;
@@ -826,7 +850,6 @@ function doPost(e) {
             e.preventDefault();
             const code = document.getElementById('loginCodeInput').value.trim().toUpperCase();
             
-            // Check student against live appState.students
             const student = appState.students.find(s => String(s.code).toUpperCase() === code);
             if (student) {
                 appState.currentUser = { role: 'student', data: student };
@@ -835,7 +858,6 @@ function doPost(e) {
                 return;
             }
 
-            // Check teacher against live appState.teachers
             const teacher = appState.teachers.find(t => String(t.code).toUpperCase() === code);
             if (teacher) {
                 appState.currentUser = { role: 'teacher', data: teacher };
@@ -857,18 +879,6 @@ function doPost(e) {
             } else {
                 showToast('Hatalı admin şifresi!', 'error');
             }
-        }
-
-        function quickLogin(code) {
-            document.getElementById('loginCodeInput').value = code;
-            switchLoginTab('user');
-            handleUserLogin(new Event('submit'));
-        }
-
-        function quickLoginAdmin() {
-            document.getElementById('adminPasswordInput').value = 'admin.6565';
-            switchLoginTab('admin');
-            handleAdminLogin(new Event('submit'));
         }
 
         function handleLogout() {
@@ -937,11 +947,25 @@ function doPost(e) {
             document.getElementById('studentCoachName').textContent = coach ? coach.name : 'Atanmadı';
             document.getElementById('studentCoachSubject').textContent = coach ? coach.subject : '-';
 
-            // Populate Student Month Dropdown
-            const studentName = appState.currentUser.data.name.toLowerCase().trim();
+            // Calculate current week goal progress
+            const studentName = refreshedStudent.name.toLowerCase().trim();
             const studentRecords = appState.records.filter(r => r.student && r.student.toLowerCase().trim() === studentName);
-            const months = getAvailableMonthsFromRecords(studentRecords);
             
+            let currentWeekTotal = 0;
+            studentRecords.forEach(r => {
+                if (isDateInCurrentWeek(r.date)) {
+                    currentWeekTotal += parseInt(r.total || (parseInt(r.correct || 0) + parseInt(r.incorrect || 0) + parseInt(r.blank || 0)));
+                }
+            });
+
+            const weeklyGoal = parseInt(refreshedStudent.weeklyGoal || 0);
+            const goalPercent = weeklyGoal > 0 ? Math.min(100, Math.round((currentWeekTotal / weeklyGoal) * 100)) : 0;
+
+            document.getElementById('studentWeeklyGoalStat').textContent = `${currentWeekTotal} / ${weeklyGoal} Soru`;
+            document.getElementById('studentWeeklyGoalSub').textContent = `%${goalPercent} Tamamlandı`;
+
+            // Populate Student Month Dropdown
+            const months = getAvailableMonthsFromRecords(studentRecords);
             const monthSelect = document.getElementById('studentMonthSelect');
             const currentSelected = monthSelect.value;
             monthSelect.innerHTML = '<option value="ALL">Tüm Zamanlar (Toplam)</option>';
@@ -1011,8 +1035,6 @@ function doPost(e) {
             });
 
             document.getElementById('studentStatTotal').textContent = totalQ;
-            const acc = totalQ > 0 ? Math.round((totalC / totalQ) * 100) : 0;
-            document.getElementById('studentStatAccuracy').textContent = `%${acc}`;
             document.getElementById('studentStatBreakdown').innerHTML = `<span class="text-emerald-600">${totalC} D</span> / <span class="text-rose-600">${totalI} Y</span> / <span class="text-amber-600">${totalB} B</span>`;
             document.getElementById('studentRecordCount').textContent = `${filtered.length} Kayıt`;
 
@@ -1124,6 +1146,7 @@ function doPost(e) {
                     }
 
                     const totalQ = sLogs.reduce((acc, r) => acc + parseInt(r.total || 0), 0);
+                    const weeklyGoal = s.weeklyGoal || 0;
 
                     const card = document.createElement('div');
                     card.className = 'bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3';
@@ -1135,13 +1158,18 @@ function doPost(e) {
                             </div>
                             <span class="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-lg">${totalQ} Soru</span>
                         </div>
-                        <div class="bg-slate-50 p-2.5 rounded-xl text-xs text-slate-600 border border-slate-100">
-                            <span class="font-semibold text-slate-700">Koçluk Notu:</span> ${s.note ? `"${s.note}"` : 'Henüz not yazılmadı.'}
+                        <div class="bg-slate-50 p-2.5 rounded-xl text-xs text-slate-600 border border-slate-100 space-y-1">
+                            <div><span class="font-semibold text-slate-700">Koçluk Notu:</span> ${s.note ? `"${s.note}"` : 'Henüz not yazılmadı.'}</div>
                         </div>
-                        <button onclick="openTeacherNoteModal('${s.id}')" class="w-full py-2 bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5">
-                            <i class="fa-solid fa-pen-to-square"></i>
-                            <span>Koçluk Notu Düzenle</span>
-                        </button>
+                        <div class="flex items-center gap-2 pt-1">
+                            <div class="flex-1">
+                                <label class="block text-[10px] font-bold text-slate-500 mb-0.5">Haftalık Soru Hedefi</label>
+                                <input type="number" min="0" value="${weeklyGoal}" onchange="updateStudentWeeklyGoal('${s.id}', this.value)" class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-bold text-brand-700 bg-slate-50">
+                            </div>
+                            <button onclick="openTeacherNoteModal('${s.id}')" class="mt-4 px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold rounded-xl text-xs transition flex items-center gap-1">
+                                <i class="fa-solid fa-pen-to-square"></i> Not Yaz
+                            </button>
+                        </div>
                     `;
                     container.appendChild(card);
                 });
@@ -1160,7 +1188,6 @@ function doPost(e) {
                 const monthText = selectedMonth !== 'ALL' ? ` (${formatMonthYearTR(selectedMonth)})` : ' (Tüm Dönemler)';
                 summaryTitle.textContent = titleText + monthText;
 
-                // Filter records for summary grid
                 let summaryRecords = appState.records.filter(r => {
                     if (!r.student) return false;
                     const matchStudent = selectedStudent === 'ALL' 
@@ -1219,6 +1246,15 @@ function doPost(e) {
             }
         }
 
+        function updateStudentWeeklyGoal(studentId, val) {
+            const student = appState.students.find(s => String(s.id) === String(studentId));
+            if (student) {
+                student.weeklyGoal = parseInt(val || 0);
+                saveUsersToStorageAndSheet();
+                showToast('Haftalık hedef e-tabloya kaydedildi', 'success');
+            }
+        }
+
         function renderTeacherLogs() {
             const teacher = appState.currentUser.data;
             const myStudents = appState.students.filter(s => String(s.teacherId) === String(teacher.id));
@@ -1265,7 +1301,6 @@ function doPost(e) {
         }
 
         function populateAdminFilters() {
-            // Populate student dropdown filter
             const studentSelect = document.getElementById('adminStudentFilter');
             if (studentSelect) {
                 const currentSelected = studentSelect.value;
@@ -1286,7 +1321,6 @@ function doPost(e) {
                 }
             }
 
-            // Populate month/date dropdown filter
             const monthSelect = document.getElementById('adminMonthFilter');
             if (monthSelect) {
                 const currentSelected = monthSelect.value;
@@ -1374,27 +1408,48 @@ function doPost(e) {
 
             appState.teachers.forEach(t => {
                 const coachedStudents = appState.students.filter(s => String(s.teacherId) === String(t.id));
+                const availableStudents = appState.students.filter(s => String(s.teacherId) !== String(t.id));
 
                 const card = document.createElement('div');
-                card.className = 'bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3';
+                card.className = 'bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between';
                 
-                let studentCheckboxes = appState.students.map(s => {
-                    const isChecked = String(s.teacherId) === String(t.id) ? 'checked' : '';
-                    return `
-                        <label class="flex items-center space-x-2 text-xs py-1 hover:bg-slate-50 px-2 rounded cursor-pointer">
-                            <input type="checkbox" ${isChecked} onchange="toggleCoachAssignment('${t.id}', '${s.id}', this.checked)" class="rounded text-brand-600 focus:ring-brand-500">
-                            <span class="font-medium text-slate-700">${s.name} (${s.class || '-'})</span>
-                        </label>
-                    `;
-                }).join('');
+                let assignedListHTML = coachedStudents.map(s => `
+                    <div class="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 text-xs">
+                        <div>
+                            <span class="font-bold text-slate-800">${s.name}</span>
+                            <span class="text-slate-400 ml-1">(${s.class || '-'})</span>
+                        </div>
+                        <button onclick="toggleCoachAssignment('${t.id}', '${s.id}', false)" class="text-rose-500 hover:text-rose-700 p-1" title="Koçluktan Çıkar">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                `).join('');
+
+                let optionsHTML = availableStudents.map(s => `
+                    <option value="${s.id}">${s.name} (${s.class || '-'})</option>
+                `).join('');
 
                 card.innerHTML = `
-                    <div class="border-b border-slate-100 pb-2">
-                        <h4 class="font-bold text-slate-800 text-sm">${t.name}</h4>
-                        <p class="text-xs text-emerald-600 font-semibold">${t.subject} (${coachedStudents.length} Öğrenci)</p>
+                    <div class="space-y-3">
+                        <div class="border-b border-slate-100 pb-2 flex items-center justify-between">
+                            <div>
+                                <h4 class="font-bold text-slate-800 text-sm">${t.name}</h4>
+                                <p class="text-xs text-emerald-600 font-semibold">${t.subject}</p>
+                            </div>
+                            <span class="px-2.5 py-0.5 bg-brand-50 text-brand-700 text-xs font-extrabold rounded-full">${coachedStudents.length} Öğrenci</span>
+                        </div>
+                        <div class="space-y-1.5 max-h-40 overflow-y-auto">
+                            ${assignedListHTML || '<p class="text-xs text-slate-400 italic py-1">Henüz atanmış öğrenci yok.</p>'}
+                        </div>
                     </div>
-                    <div class="space-y-1 max-h-48 overflow-y-auto">
-                        ${studentCheckboxes || '<p class="text-xs text-slate-400">Öğrenci bulunamadı.</p>'}
+                    <div class="pt-3 border-t border-slate-100 flex items-center gap-2">
+                        <select id="selectAddStudent_${t.id}" class="flex-1 px-2.5 py-1.5 text-xs border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 bg-slate-50">
+                            <option value="">Öğrenci Seç ve Ata...</option>
+                            ${optionsHTML}
+                        </select>
+                        <button onclick="addStudentToTeacherCard('${t.id}')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-1 whitespace-nowrap">
+                            <i class="fa-solid fa-plus"></i> Ata
+                        </button>
                     </div>
                 `;
                 container.appendChild(card);
@@ -1411,6 +1466,16 @@ function doPost(e) {
             }
         }
 
+        function addStudentToTeacherCard(teacherId) {
+            const selectEl = document.getElementById(`selectAddStudent_${teacherId}`);
+            const studentId = selectEl.value;
+            if (!studentId) {
+                showToast('Lütfen atanacak bir öğrenci seçin!', 'error');
+                return;
+            }
+            toggleCoachAssignment(teacherId, studentId, true);
+        }
+
         function renderAdminLogs() {
             const selectedStudent = document.getElementById('adminStudentFilter')?.value || 'ALL';
             const selectedMonth = document.getElementById('adminMonthFilter')?.value || 'ALL';
@@ -1422,7 +1487,6 @@ function doPost(e) {
                 return matchStudent && matchMonth;
             });
 
-            // Calculate overall totals for filtered records
             let sumTotal = 0, sumCorrect = 0, sumIncorrect = 0, sumBlank = 0;
             filtered.forEach(r => {
                 const c = parseInt(r.correct || 0);
@@ -1435,18 +1499,11 @@ function doPost(e) {
                 sumTotal += t;
             });
 
-            // Update top summary cards
-            const summaryTotalEl = document.getElementById('adminSummaryTotal');
-            const summaryCorrectEl = document.getElementById('adminSummaryCorrect');
-            const summaryIncorrectEl = document.getElementById('adminSummaryIncorrect');
-            const summaryBlankEl = document.getElementById('adminSummaryBlank');
-            const badgeEl = document.getElementById('adminRecordCountBadge');
-
-            if (summaryTotalEl) summaryTotalEl.textContent = sumTotal;
-            if (summaryCorrectEl) summaryCorrectEl.textContent = sumCorrect;
-            if (summaryIncorrectEl) summaryIncorrectEl.textContent = sumIncorrect;
-            if (summaryBlankEl) summaryBlankEl.textContent = sumBlank;
-            if (badgeEl) badgeEl.textContent = `${filtered.length} Kayıt`;
+            document.getElementById('adminSummaryTotal').textContent = sumTotal;
+            document.getElementById('adminSummaryCorrect').textContent = sumCorrect;
+            document.getElementById('adminSummaryIncorrect').textContent = sumIncorrect;
+            document.getElementById('adminSummaryBlank').textContent = sumBlank;
+            document.getElementById('adminRecordCountBadge').textContent = `${filtered.length} Kayıt`;
 
             const tbody = document.getElementById('adminLogsTable');
             if (!tbody) return;
@@ -1492,7 +1549,7 @@ function doPost(e) {
             const code = document.getElementById('newStudentCode').value.trim().toUpperCase();
             const teacherId = document.getElementById('newStudentTeacher').value || '';
 
-            appState.students.push({ id: 'S' + Date.now(), name, class: cls, code, teacherId, note: '' });
+            appState.students.push({ id: 'S' + Date.now(), name, class: cls, code, teacherId, note: '', weeklyGoal: 0 });
             saveUsersToStorageAndSheet();
             closeModal('addStudentModal');
             renderAdminUsers();
@@ -1536,7 +1593,6 @@ function doPost(e) {
             showToast('Koçluk notu e-tabloya kaydedildi', 'success');
         }
 
-        // Save local & trigger sheet POST for user configurations
         async function saveUsersToStorageAndSheet() {
             localStorage.setItem('coaching_teachers', JSON.stringify(appState.teachers));
             localStorage.setItem('coaching_students', JSON.stringify(appState.students));
@@ -1647,9 +1703,7 @@ function doPost(e) {
                 const res = await fetch(appState.sheetUrl);
                 const data = await res.json();
                 
-                // Handle multi-tab responses
                 if (data && typeof data === 'object') {
-                    // Update Records
                     if (Array.isArray(data.records)) {
                         appState.records = data.records.map(item => ({
                             id: item.id || item.ID || 'R' + Math.random(),
@@ -1663,32 +1717,32 @@ function doPost(e) {
                             total: item.total || item.Toplam || 0
                         }));
                     } else if (Array.isArray(data)) {
-                        appState.records = data; // Legacy flat array fallback
+                        appState.records = data;
                     }
 
-                    // Update Teachers
                     if (Array.isArray(data.teachers) && data.teachers.length > 0) {
                         appState.teachers = data.teachers;
                         localStorage.setItem('coaching_teachers', JSON.stringify(appState.teachers));
                     }
 
-                    // Update Students
                     if (Array.isArray(data.students) && data.students.length > 0) {
-                        appState.students = data.students;
+                        appState.students = data.students.map(s => ({
+                            ...s,
+                            weeklyGoal: parseInt(s.weeklyGoal || s.HaftalikHedef || 0)
+                        }));
                         localStorage.setItem('coaching_students', JSON.stringify(appState.students));
                     }
 
                     if (syncBadge) syncBadge.className = 'hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200';
                     if (syncText) syncText.textContent = 'E-Tablo Canlı';
 
-                    // Re-render active screens
                     if (appState.currentUser) {
                         if (appState.currentUser.role === 'student') setupStudentView();
                         else if (appState.currentUser.role === 'teacher') setupTeacherView();
                         else if (appState.currentUser.role === 'admin') setupAdminView();
                     }
 
-                    if (isManual) showToast('E-Tablodan güncel veriler ve kullanıcılar çekildi', 'success');
+                    if (isManual) showToast('E-Tablodan güncel veriler çekildi', 'success');
                 }
             } catch (err) {
                 console.warn('Google Sheet fetch fallback:', err);
