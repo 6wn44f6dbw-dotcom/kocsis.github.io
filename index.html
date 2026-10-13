@@ -175,7 +175,6 @@
                     </div>
                 </div>
 
-                <!-- Updated Widget: Haftalık Hedef Durumu -->
                 <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
                     <div>
                         <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Haftalık Hedef Durumu</p>
@@ -819,6 +818,31 @@ function doPost(e) {
             return d >= monday && d <= sunday;
         }
 
+        // Helper: Check if date string falls within previous ISO week
+        function isDateInLastWeek(dateStr) {
+            if (!dateStr) return false;
+            const clean = formatDateOnly(dateStr);
+            const d = new Date(clean);
+            if (isNaN(d.getTime())) return false;
+
+            const now = new Date();
+            const dayOfWeek = now.getDay();
+            const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+            
+            const thisMonday = new Date(now);
+            thisMonday.setDate(now.getDate() + distanceToMonday);
+            thisMonday.setHours(0, 0, 0, 0);
+
+            const lastMonday = new Date(thisMonday);
+            lastMonday.setDate(thisMonday.getDate() - 7);
+
+            const lastSunday = new Date(thisMonday);
+            lastSunday.setDate(thisMonday.getDate() - 1);
+            lastSunday.setHours(23, 59, 59, 999);
+
+            return d >= lastMonday && d <= lastSunday;
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('inputDate').value = getLocalDateString();
             document.getElementById('inputSheetUrl').value = appState.sheetUrl;
@@ -964,10 +988,15 @@ function doPost(e) {
             document.getElementById('studentWeeklyGoalStat').textContent = `${currentWeekTotal} / ${weeklyGoal} Soru`;
             document.getElementById('studentWeeklyGoalSub').textContent = `%${goalPercent} Tamamlandı`;
 
-            // Populate Student Month Dropdown
+            // Populate Student Month Dropdown with Default Current Month (YYYY-MM)
             const months = getAvailableMonthsFromRecords(studentRecords);
+            const nowYM = getLocalDateString().substring(0, 7); // e.g., "2026-10"
+            if (!months.includes(nowYM)) {
+                months.push(nowYM);
+                months.sort().reverse();
+            }
+
             const monthSelect = document.getElementById('studentMonthSelect');
-            const currentSelected = monthSelect.value;
             monthSelect.innerHTML = '<option value="ALL">Tüm Zamanlar (Toplam)</option>';
             months.forEach(ym => {
                 const opt = document.createElement('option');
@@ -975,7 +1004,9 @@ function doPost(e) {
                 opt.textContent = formatMonthYearTR(ym);
                 monthSelect.appendChild(opt);
             });
-            if (months.includes(currentSelected)) monthSelect.value = currentSelected;
+
+            // FORCE default selection to current active month on initial view load
+            monthSelect.value = nowYM;
 
             renderStudentLogs();
         }
@@ -1139,14 +1170,25 @@ function doPost(e) {
                 container.innerHTML = `<p class="text-xs text-slate-400 col-span-3 py-4 text-center">Size henüz öğrenci atanmamıştır.</p>`;
             } else {
                 myStudents.forEach(s => {
-                    let sLogs = appState.records.filter(r => r.student && r.student.toLowerCase().trim() === s.name.toLowerCase().trim());
+                    const sLogs = appState.records.filter(r => r.student && r.student.toLowerCase().trim() === s.name.toLowerCase().trim());
 
-                    if (selectedMonth !== 'ALL') {
-                        sLogs = sLogs.filter(r => formatDateOnly(r.date).startsWith(selectedMonth));
-                    }
+                    const weeklyGoal = parseInt(s.weeklyGoal || 0);
+                    let thisWeekQ = 0;
+                    let lastWeekQ = 0;
+
+                    sLogs.forEach(r => {
+                        const qCount = parseInt(r.total || (parseInt(r.correct || 0) + parseInt(r.incorrect || 0) + parseInt(r.blank || 0)));
+                        if (isDateInCurrentWeek(r.date)) {
+                            thisWeekQ += qCount;
+                        } else if (isDateInLastWeek(r.date)) {
+                            lastWeekQ += qCount;
+                        }
+                    });
+
+                    const thisWeekPercent = weeklyGoal > 0 ? Math.round((thisWeekQ / weeklyGoal) * 100) : 0;
+                    const lastWeekPercent = weeklyGoal > 0 ? Math.round((lastWeekQ / weeklyGoal) * 100) : 0;
 
                     const totalQ = sLogs.reduce((acc, r) => acc + parseInt(r.total || 0), 0);
-                    const weeklyGoal = s.weeklyGoal || 0;
 
                     const card = document.createElement('div');
                     card.className = 'bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3';
@@ -1161,6 +1203,8 @@ function doPost(e) {
                         <div class="bg-slate-50 p-2.5 rounded-xl text-xs text-slate-600 border border-slate-100 space-y-1">
                             <div><span class="font-semibold text-slate-700">Koçluk Notu:</span> ${s.note ? `"${s.note}"` : 'Henüz not yazılmadı.'}</div>
                         </div>
+                        
+                        <!-- Weekly Goal Input Area -->
                         <div class="flex items-center gap-2 pt-1">
                             <div class="flex-1">
                                 <label class="block text-[10px] font-bold text-slate-500 mb-0.5">Haftalık Soru Hedefi</label>
@@ -1169,6 +1213,22 @@ function doPost(e) {
                             <button onclick="openTeacherNoteModal('${s.id}')" class="mt-4 px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold rounded-xl text-xs transition flex items-center gap-1">
                                 <i class="fa-solid fa-pen-to-square"></i> Not Yaz
                             </button>
+                        </div>
+
+                        <!-- Weekly Progress Comparison Box -->
+                        <div class="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200 text-[11px] space-y-1.5">
+                            <div class="font-bold text-slate-700 flex items-center gap-1.5 border-b border-slate-200 pb-1">
+                                <i class="fa-solid fa-chart-line text-brand-600"></i>
+                                <span>Hedef Gerçekleşme Durumu</span>
+                            </div>
+                            <div class="flex items-center justify-between text-slate-600">
+                                <span>Bu Hafta:</span>
+                                <span class="font-bold text-slate-800">${thisWeekQ} / ${weeklyGoal} Soru <span class="text-brand-600">(%${thisWeekPercent})</span></span>
+                            </div>
+                            <div class="flex items-center justify-between text-slate-600">
+                                <span>Geçen Hafta:</span>
+                                <span class="font-bold text-slate-800">${lastWeekQ} / ${weeklyGoal} Soru <span class="text-slate-500">(%${lastWeekPercent})</span></span>
+                            </div>
                         </div>
                     `;
                     container.appendChild(card);
