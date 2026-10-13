@@ -764,14 +764,26 @@ function doPost(e) {
             return `${year}-${month}-${day}`;
         }
 
-        // Helper: Clean date to strictly YYYY-MM-DD (removes time, T, HH:MM)
+        // Helper: Clean date to strictly YYYY-MM-DD (removes time, T, HH:MM and prevents timezone shift)
         function formatDateOnly(dateStr) {
             if (!dateStr) return '-';
-            const clean = String(dateStr).split('T')[0].split(' ')[0].trim();
+            const str = String(dateStr).trim();
+            // If Google Sheets returns ISO string like "2026-10-12T21:00:00.000Z", extract year, month, day directly
+            if (str.includes('T') || str.includes('Z')) {
+                const parts = str.split('T')[0].split('-');
+                if (parts.length === 3) {
+                    // Check if Excel/Sheets date shifted back by UTC conversion
+                    const d = new Date(str);
+                    if (!isNaN(d.getTime())) {
+                        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                    }
+                }
+            }
+            const clean = str.split('T')[0].split(' ')[0].trim();
             return clean || '-';
         }
 
-        // Helper: Convert YYYY-MM or YYYY-MM-DD into "Eylül 2026"
+        // Helper: Convert YYYY-MM or YYYY-MM-DD into "Ekim 2026"
         function formatMonthYearTR(yearMonthStr) {
             if (!yearMonthStr || yearMonthStr.length < 7) return yearMonthStr;
             const parts = yearMonthStr.split('-');
@@ -800,10 +812,13 @@ function doPost(e) {
         function isDateInCurrentWeek(dateStr) {
             if (!dateStr) return false;
             const clean = formatDateOnly(dateStr);
-            const d = new Date(clean);
+            const parts = clean.split('-');
+            if (parts.length !== 3) return false;
+            const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
             if (isNaN(d.getTime())) return false;
 
             const now = new Date();
+            now.setHours(0, 0, 0, 0);
             const dayOfWeek = now.getDay(); // 0 is Sunday, 1 is Monday...
             const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
             
@@ -822,10 +837,13 @@ function doPost(e) {
         function isDateInLastWeek(dateStr) {
             if (!dateStr) return false;
             const clean = formatDateOnly(dateStr);
-            const d = new Date(clean);
+            const parts = clean.split('-');
+            if (parts.length !== 3) return false;
+            const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
             if (isNaN(d.getTime())) return false;
 
             const now = new Date();
+            now.setHours(0, 0, 0, 0);
             const dayOfWeek = now.getDay();
             const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
             
@@ -1227,7 +1245,7 @@ function doPost(e) {
                             </div>
                             <div class="flex items-center justify-between text-slate-600">
                                 <span>Geçen Hafta:</span>
-                                <span class="font-bold text-slate-800">${lastWeekQ}  Soru <span class="text-slate-500">(%${lastWeekPercent})</span></span>
+                                <span class="font-bold text-slate-800">${lastWeekQ} / ${weeklyGoal} Soru <span class="text-slate-500">(%${lastWeekPercent})</span></span>
                             </div>
                         </div>
                     `;
